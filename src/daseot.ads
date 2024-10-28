@@ -106,9 +106,7 @@ private
    function Is_Empty (This : Base_Node) return Boolean is abstract;
 
    type Node (Ptr : access Base_Node'Class) is tagged limited null record
-     with
-       Implicit_Dereference => Ptr,
-       Type_Invariant => Check_Node (Node.Ptr.all);
+     with Implicit_Dereference => Ptr;
 
    function Ref (This : aliased Base_Node'Class) return Node'Class
    is (Node'(Ptr => This'Unrestricted_Access));
@@ -116,25 +114,19 @@ private
    package Node_Holders is
      new Ada.Containers.Indefinite_Holders (Base_Node'Class);
 
+   type Empty_Node is new Base_Node with null record;
+
+   overriding function Is_Empty (This : Empty_Node) return Boolean is (True);
+
    subtype Placeholder is Node_Holders.Holder; -- TODO: remove
-
-   type Empty is new Base_Node with null record;
-
-   overriding function Is_Empty (This : Empty) return Boolean is (True);
-
-   Empty_Node : constant Empty := (null record);
-
-   type Root_Node is new Base_Node with record
-      Root : Node_Holders.Holder := Node_Holders.To_Holder (Empty_Node);
-   end record;
 
    --  We use a doubly nested root so we can always return a reference to the
    --  root node.
 
    type Tree is tagged record
-      Root : aliased Root_Node;
-   end record
-     with Type_Invariant => not Root.Root.Is_Empty;
+      Root : Node_Holders.Holder :=
+               Node_Holders.To_Holder (Empty_Node'(null record));
+   end record;
 
    package Node_Maps is
      new Ada.Containers.Indefinite_Ordered_Maps (Keys, Base_Node'Class);
@@ -175,9 +167,6 @@ private
             List_Cursor : Placeholder;
       end case;
    end record;
-
-   function Check_Node (This : Base_Node'Class) return Boolean
-   is (This in Root_Node | Real_Node'Class);
 
    -------------
    --  IMPLS  --
@@ -248,15 +237,8 @@ private
    -- Is_Empty --
    --------------
 
-   overriding function Is_Empty (This : Root_Node) return Boolean
-   is (This.Root.Constant_Reference.Is_Empty);
-
-   --------------
-   -- Is_Empty --
-   --------------
-
    function Is_Empty (This : Tree) return Boolean
-   is (This.Root.Root.Constant_Reference in Empty);
+   is (This.Root.Is_Empty);
 
    --------------
    -- New_Atom --
@@ -286,6 +268,6 @@ private
    ----------
 
    function Root (This : aliased in out Tree'Class) return Node
-   is (Node'(Ptr => This.Root'Access));
+   is (Node'(Ptr => This.Root.Reference.Element));
 
 end Daseot;
