@@ -22,13 +22,11 @@ package body Daseot is
       --------------
 
       procedure Traverse (This : Node'Class; Prefix : String := "") is
-         R : constant Ref := This.Edit;
       begin
          case This.Kind is
             when Atom_Kind =>
-               for E of Ref'(R) loop -- Only one, but we test the iterator so
-                  null;
-                  --  Append (Result, Prefix & Image (E.Atom));
+               for E of This loop -- Only one, but we test the iterator so
+                  Append (Result, Prefix & Image (E.Get));
                end loop;
             when Dict_Kind =>
                raise Program_Error;
@@ -41,7 +39,7 @@ package body Daseot is
       if This.Is_Empty then
          Result := +"(empty)";
       else
-         Traverse (This.Root.Root.Constant_Reference);
+         Traverse (This.Root.Root.Constant_Reference.Ref);
       end if;
 
       return To_String (Result);
@@ -51,33 +49,32 @@ package body Daseot is
    -- Kind --
    ----------
 
-   function Kind (This : Node'Class) return Kinds
-   is (if This in Atom_Node then Atom_Kind
-       elsif This in Dict_Node then Dict_Kind
-       elsif This in List_Node then List_Kind
-       else raise Program_Error with Image (This'Tag));
+   function Kind (This : Node) return Kinds
+   is (if This.Ptr.all in Real_Node
+       then Real_Node (This.Ptr.all).Data.Kind
+       else raise Program_Error with Image (This.Ptr.all'Tag));
 
    ---------
    -- Set --
    ---------
 
-   procedure Set (This : in out Dict_Node; Key : Keys; Val : Node'Class) is
+   procedure Set (This : aliased Node; Key : Keys; Val : Scalar) is
    begin
-      This.Data.Dict.Include (Key, Val);
+      Real_Node (This.Ptr.all).Data.Dict.Include (Key, New_Atom (Val));
    end Set;
 
    ---------
    -- Set --
    ---------
 
-   function Set (This : aliased Dict_Node'Class;
+   function Set (This : aliased Node;
                  Key  : Keys;
-                 Val  : Node'Class)
-                 return Ref
+                 Val  : Scalar)
+                 return Node
    is
    begin
-      return Result : constant Ref := (Element => This'Unrestricted_Access) do
-         Dict_Node (Result.Element.all).Set (Key, Val);
+      return Result : constant Node := (Ptr => This.Ptr) do
+         Result.Set (Key, Val);
       end return;
    end Set;
 
@@ -85,24 +82,15 @@ package body Daseot is
    -- Set --
    ---------
 
-   procedure Set (This : Ref; Value : Node'Class) is
+   procedure Set (This : Node; Value : Scalar) is
    begin
-      if This.Element.all in Root_Node then
-         Root_Node (This.Element.all).Root.Replace_Element (Value);
-      elsif This.Element.all in Real_Node then
-         Real_Node (This.Element.all).Data := Real_Node (Value).Data;
+      if This.Ptr.all in Root_Node then
+         Root_Node (This.Ptr.all).Root.Replace_Element (New_Atom (Value));
+      elsif This.Ptr.all in Real_Node then
+         Real_Node (This.Ptr.all) := New_Atom (Value);
       else
-         raise Program_Error with Ada.Tags.External_Tag (This.Element.all'Tag);
+         raise Program_Error with Image (This.Ptr.all'Tag);
       end if;
-   end Set;
-
-   ---------
-   -- Set --
-   ---------
-
-   procedure Set (This : Ref; Value : Scalar) is
-   begin
-      This.Set (New_Atom (Value));
    end Set;
 
 end Daseot;

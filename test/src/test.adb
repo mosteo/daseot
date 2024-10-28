@@ -26,11 +26,11 @@ begin
 
    Tree.Root.Set ("hello");
    pragma Assert (Tree.Is_Populated);
-   pragma Assert (Tree.Root.Atom = "hello");
+   pragma Assert (Tree.Root.Get = "hello");
    Report ("Atom tree", Tree);
 
    --  Replace root with a map
 
-   Tree.Root.Set (New_Dict.Set ("key", New_Atom ("value")).Element.all);
+   Tree.Root.Set ("key", "value");
    Report ("Dict tree", Tree);
 end Test;
