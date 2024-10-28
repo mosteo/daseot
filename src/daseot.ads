@@ -1,4 +1,9 @@
 private with Ada.Containers.Indefinite_Holders;
+private with Ada.Containers.Indefinite_Ordered_Maps;
+
+------------
+-- Daseot --
+------------
 
 ------------
 -- Daseot --
@@ -6,9 +11,15 @@ private with Ada.Containers.Indefinite_Holders;
 
 generic
    type Scalar (<>) is private;
+   with function Image (Value : Scalar) return String is <>;
+   --  One line UTF-8 encoded
 package Daseot is
 
    --  This package uses thread-unsafe by-copy semantics
+
+   -------------
+   --  Trees  --
+   -------------
 
    type Tree is tagged private;
 
@@ -18,12 +29,16 @@ package Daseot is
 
    type Kinds is (Atom_Kind, Dict_Kind, List_Kind);
 
+   function Image (This : Tree) return String;
+   --  Multi-line UTF-8-encoded
+
+   -------------
+   --  Nodes  --
+   -------------
+
    type Node is abstract tagged private;
 
    function Kind (This : Node'Class) return Kinds;
-
-   function Root (This : Tree) return Node'Class
-     with Pre => This.Is_Populated;
 
    function Atom (This : Node'Class) return Scalar
      with Pre => This.Kind = Atom_Kind;
@@ -35,7 +50,15 @@ package Daseot is
    --  Edition of trees/nodes is done through a Ref, which should never be
    --  stored.
 
-   type Ref (<>) is tagged limited private;
+   type Ref (Element : access Node'Class) is tagged limited private with
+     Implicit_Dereference => Element,
+     Iterable =>
+       (First       => First,
+        Next        => Next,
+        Has_Element => Has_Element,
+        Element     => Element);
+
+   function Edit (This : aliased Node'Class) return Ref;
 
    procedure Set (This : Ref; Value : Node'Class);
 
@@ -64,17 +87,43 @@ package Daseot is
 
    subtype Keys is String;
 
-   --  function New_Dict return Dict;
-   --
-   --  function Is_Empty (This : Dict) return Boolean;
-   --
---  function Is_Populated (This : Dict) return Boolean is (not This.Is_Empty);
-   --
-   --  procedure Set (This : in out Dict; Key : Keys; Val : Scalar);
+   function New_Dict return Dict_Node;
+
+   function Is_Empty (This : Dict_Node) return Boolean;
+
+   function Is_Populated (This : Dict_Node) return Boolean
+   is (not This.Is_Empty);
+
+   procedure Set (This : in out Dict_Node; Key : Keys; Val : Node'Class);
+
+   function Set (This : aliased Dict_Node'Class;
+                 Key  : Keys;
+                 Val  : Node'Class)
+                 return Ref;
+   --  Return the updated Dict_Node, for chaining
 
    -------------
    --  Lists  --
    -------------
+
+   -----------------
+   --  Internals  --
+   -----------------
+
+   --  These are exposed due to Ada technicalities but are not needed by
+   --  clients.
+
+   type Mutable_Node (<>) is private;
+
+   type Cursor (<>) is private;
+
+   function First (This : Ref) return Cursor;
+
+   function Next (This : Ref; C : Cursor) return Cursor;
+
+   function Has_Element (This : Ref; C : Cursor) return Boolean;
+
+   function Element (This : Ref; C : Cursor) return Ref;
 
 private
 
@@ -100,21 +149,38 @@ private
    end record
      with Type_Invariant => not Root.Root.Is_Empty;
 
+   package Node_Maps is
+     new Ada.Containers.Indefinite_Ordered_Maps (Keys, Node'Class);
+
    package Scalar_Holders is new Ada.Containers.Indefinite_Holders (Scalar);
+
+   function Assert_Mutable_Contents (This : Mutable_Node) return Boolean;
 
    type Mutable_Node (Kind : Kinds := Atom_Kind) is record
       case Kind is
          when Atom_Kind =>
             Value : Scalar_Holders.Holder;
          when Dict_Kind =>
-            Dict  : Placeholder;
+            Dict  : Node_Maps.Map;
          when List_Kind =>
             List  : Placeholder;
       end case;
-   end record;
+   end record
+     with Type_Invariant => Assert_Mutable_Contents (Mutable_Node);
 
    type Real_Node is new Node with record
       Data : Mutable_Node;
+   end record;
+
+   type Cursor (Kind : Kinds) is record
+      case Kind is
+         when Atom_Kind =>
+            Visited     : Boolean := False;
+         when Dict_Kind =>
+            Dict_Cursor : Node_Maps.Cursor;
+         when List_Kind =>
+            List_Cursor : Placeholder;
+      end case;
    end record;
 
    type Atom_Node is new Real_Node with null record;
@@ -123,12 +189,27 @@ private
 
    type List_Node is new Real_Node with null record;
 
-   type Ref (Ptr : access Node'Class) is tagged limited null record
-     with Type_Invariant => Ref.Ptr.all in Root_Node | Real_Node;
+   function Check_Ref_Node (This : Node'Class) return Boolean
+   is (This in Root_Node | Real_Node'Class);
+
+   type Ref (Element : access Node'Class) is tagged limited null record
+     with Type_Invariant => Check_Ref_Node (Ref.Element.all);
 
    -------------
    --  IMPLS  --
    -------------
+
+   -----------------------------
+   -- Assert_Mutable_Contents --
+   -----------------------------
+
+   function Assert_Mutable_Contents (This : Mutable_Node) return Boolean
+   is (case This.Kind is
+          when Atom_Kind =>
+             not This.Value.Is_Empty,
+          when Dict_Kind =>
+             (for all E of This.Dict => E in Real_Node'Class),
+          when others => True);
 
    ----------
    -- Atom --
@@ -138,14 +219,43 @@ private
    is (Real_Node (This).Data.Value.Element);
 
    ----------
-   -- Kind --
+   -- Edit --
    ----------
 
-   function Kind (This : Node'Class) return Kinds
-   is (if This in Atom_Node then Atom_Kind
-       elsif This in Dict_Node then Dict_Kind
-       elsif This in List_Node then List_Kind
-       else raise Program_Error);
+   function Edit (This : aliased Node'Class) return Ref
+   is (Element => This'Unrestricted_Access);
+
+   -------------
+   -- Element --
+   -------------
+
+   function Element (This : Ref; C : Cursor) return Ref
+   is (raise Program_Error);
+
+   -----------
+   -- First --
+   -----------
+
+   function First (This : Ref) return Cursor
+   is (case This.Element.Kind is
+          when Atom_Kind => (Kind => Atom_Kind, others => <>),
+          when Dict_Kind => raise Program_Error,
+          when List_Kind => raise Program_Error
+      );
+
+   -----------------
+   -- Has_Element --
+   -----------------
+
+   function Has_Element (This : Ref; C : Cursor) return Boolean
+   is (raise Program_Error);
+
+   --------------
+   -- Is_Empty --
+   --------------
+
+   function Is_Empty (This : Dict_Node) return Boolean
+   is (This.Data.Dict.Is_Empty);
 
    --------------
    -- Is_Empty --
@@ -162,20 +272,26 @@ private
    is (Data => (Kind  => Atom_Kind,
                 Value => Scalar_Holders.To_Holder (Value)));
 
+   --------------
+   -- New_Dict --
+   --------------
+
+   function New_Dict return Dict_Node
+   is (Data => (Kind   => Dict_Kind,
+                others => <>));
+
    ----------
-   -- Root --
+   -- Next --
    ----------
 
-   function Root (This : Tree) return Node'Class
-   is (if This.Is_Populated
-       then This.Root.Root.Element
-       else raise Program_Error with "tree is empty");
+   function Next (This : Ref; C : Cursor) return Cursor
+   is (raise Program_Error);
 
    ----------
    -- Root --
    ----------
 
    function Root (This : aliased in out Tree'Class) return Ref
-   is (Ref'(Ptr => This.Root'Access));
+   is (Ref'(Element => This.Root'Access));
 
 end Daseot;
