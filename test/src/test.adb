@@ -12,7 +12,6 @@ procedure Test is
    begin
       Put_Line (Title & ":");
       Put_Line (This.Image);
-      New_Line;
    end Report;
 
    Tree : Trees.Tree;
@@ -29,8 +28,16 @@ begin
    pragma Assert (Tree.Root.Get = "hello");
    Report ("Atom tree", Tree);
 
-   --  Replace root with a map
+   --  Replace root with a dict
 
-   Tree.Root.Set ("key", "value");
+   Tree.Root
+     .Map ("key1", "value1", Retype => True)
+     .Map ("key2", "value2");
    Report ("Dict tree", Tree);
+
+   --  Replace root with a list
+   Tree.Root
+     .Append ("val1", Retype => True)
+     .Append ("val2");
+   Report ("List tree", Tree);
 end Test;

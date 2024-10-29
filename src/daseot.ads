@@ -1,5 +1,6 @@
 private with Ada.Containers.Indefinite_Holders;
 private with Ada.Containers.Indefinite_Ordered_Maps;
+private with Ada.Containers.Indefinite_Vectors;
 
 generic
    type Scalar (<>) is private;
@@ -42,13 +43,24 @@ package Daseot is
 
    subtype Composite_Kinds is Kinds range Dict_Kind .. List_Kind;
 
+   function Is_Empty (This : Node) return Boolean;
+   --  True for an unset root or for empty Dict or List
+
+   function Is_Populated (This : Node) return Boolean
+   is (not This.Is_Empty);
+
+   function Is_Root (This : Node) return Boolean;
+
    function Kind (This : Node) return Kinds;
+   --  Will raise for an empty root
 
    -------------
    --  Atoms  --
    -------------
 
-   procedure Set (This : Node; Value : Scalar);
+   procedure Set (This   : Node;
+                  Value  : Scalar;
+                  Retype : Boolean := False);
 
    function Get (This : Node) return Scalar;
 
@@ -58,25 +70,33 @@ package Daseot is
 
    subtype Keys is String;
 
-   function Is_Empty (This : Node) return Boolean with
-     Pre => This.Kind in Composite_Kinds;
+   procedure Map (This   : aliased Node;
+                  Key    : Keys;
+                  Val    : Scalar;
+                  Retype : Boolean := False);
 
-   function Is_Populated (This : Node) return Boolean
-   is (not This.Is_Empty);
-
-   procedure Set (This : aliased Node;
-                  Key  : Keys;
-                  Val  : Scalar);
-
-   function Set (This : aliased Node;
-                 Key  : Keys;
-                 Val  : Scalar)
+   function Map (This   : aliased Node;
+                 Key    : Keys;
+                 Val    : Scalar;
+                 Retype : Boolean := False)
                  return Node;
    --  Return the updated Node, for chaining
 
    -------------
    --  Lists  --
    -------------
+
+   subtype Indices is Positive;
+
+   procedure Append (This   : aliased Node;
+                     Val    : Scalar;
+                     Retype : Boolean := False);
+
+   function Append (This   : aliased Node;
+                    Val    : Scalar;
+                    Retype : Boolean := False)
+                    return Node;
+   --  For chaining
 
    -----------------
    --  Internals  --
@@ -114,9 +134,12 @@ private
    package Node_Holders is
      new Ada.Containers.Indefinite_Holders (Base_Node'Class);
 
-   type Empty_Node is new Base_Node with null record;
+   type Root_Node is new Base_Node with record
+      Root : Node_Holders.Holder;
+   end record;
 
-   overriding function Is_Empty (This : Empty_Node) return Boolean is (True);
+   overriding function Is_Empty (This : Root_Node) return Boolean
+   is (This.Root.Is_Empty);
 
    subtype Placeholder is Node_Holders.Holder; -- TODO: remove
 
@@ -124,12 +147,14 @@ private
    --  root node.
 
    type Tree is tagged record
-      Root : Node_Holders.Holder :=
-               Node_Holders.To_Holder (Empty_Node'(null record));
+      Root : Root_Node;
    end record;
 
    package Node_Maps is
      new Ada.Containers.Indefinite_Ordered_Maps (Keys, Base_Node'Class);
+
+   package Node_Vectors is
+      new Ada.Containers.Indefinite_Vectors (Indices, Base_Node'Class);
 
    package Scalar_Holders is new Ada.Containers.Indefinite_Holders (Scalar);
 
@@ -142,7 +167,7 @@ private
          when Dict_Kind =>
             Dict  : Node_Maps.Map;
          when List_Kind =>
-            List  : Placeholder;
+            List  : Node_Vectors.Vector;
       end case;
    end record
      with Type_Invariant => Assert_Mutable_Contents (Mutable_Node);
@@ -164,7 +189,7 @@ private
          when Dict_Kind =>
             Dict_Cursor : Node_Maps.Cursor;
          when List_Kind =>
-            List_Cursor : Placeholder;
+            List_Cursor : Node_Vectors.Cursor;
       end case;
    end record;
 
@@ -184,13 +209,6 @@ private
              (for all E of This.Dict => E in Real_Node'Class),
           when others    => True);
 
-   -------------
-   -- Element --
-   -------------
-
-   function Element (This : Node; C : Cursor) return Node
-   is (raise Unimplemented);
-
    -----------
    -- First --
    -----------
@@ -200,24 +218,12 @@ private
          (case Real_Node (This.Ptr.all).Data.Kind is
              when Atom_Kind => (Kind => Atom_Kind, others => <>),
              when Dict_Kind => raise Unimplemented,
-             when List_Kind => raise Unimplemented)
+             when List_Kind =>
+               (Kind        => List_Kind,
+                List_Cursor => Real_Node (This.Ptr.all).Data.List.First))
        else
           raise Unimplemented
       );
-
-   ---------
-   -- Get --
-   ---------
-
-   function Get (This : Node) return Scalar
-   is (Real_Node (This.Ptr.all).Data.Value.Element);
-
-   -----------------
-   -- Has_Element --
-   -----------------
-
-   function Has_Element (This : Node; C : Cursor) return Boolean
-   is (raise Unimplemented);
 
    --------------
    -- Is_Empty --
@@ -240,6 +246,13 @@ private
    function Is_Empty (This : Tree) return Boolean
    is (This.Root.Is_Empty);
 
+   -------------
+   -- Is_Root --
+   -------------
+
+   function Is_Root (This : Node) return Boolean
+   is (This.Ptr.all in Root_Node);
+
    --------------
    -- New_Atom --
    --------------
@@ -261,13 +274,19 @@ private
    ----------
 
    function Next (This : Node; C : Cursor) return Cursor
-   is (raise Unimplemented);
+   is (case C.Kind is
+          when Atom_Kind => (Kind => Atom_Kind, Visited => True),
+          when List_Kind =>
+            (Kind        => List_Kind,
+             List_Cursor => Node_Vectors.Next (C.List_Cursor)),
+          when others => raise Unimplemented
+      );
 
    ----------
    -- Root --
    ----------
 
    function Root (This : aliased in out Tree'Class) return Node
-   is (Node'(Ptr => This.Root.Reference.Element));
+   is (Ptr => This.Root'Unrestricted_Access);
 
 end Daseot;
