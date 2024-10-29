@@ -6,9 +6,13 @@ generic
    type Scalar (<>) is private;
    with function Image (Value : Scalar) return String is <>;
    --  One line UTF-8 encoded
-package Daseot is
+package Daseot with Preelaborate is
 
    --  This package uses thread-unsafe by-copy semantics
+
+   type Kinds is (Atom_Kind, Dict_Kind, List_Kind);
+
+   subtype Composite_Kinds is Kinds range Dict_Kind .. List_Kind;
 
    -------------
    --  Trees  --
@@ -16,12 +20,19 @@ package Daseot is
 
    type Tree is tagged private;
 
+   function Empty_Tree return Tree;
+
    function Is_Empty (This : Tree) return Boolean;
 
    function Is_Populated (This : Tree) return Boolean is (not This.Is_Empty);
 
    function Image (This : Tree) return String;
    --  Multi-line UTF-8-encoded
+
+   function Kind (This : Tree) return Kinds
+     with Pre => This.Is_Populated;
+
+   type Tree_Array is array (Positive range <>) of Tree;
 
    ------------
    --  Node  --
@@ -37,11 +48,7 @@ package Daseot is
         Has_Element => Has_Element,
         Element     => Element);
 
-   function Root (This : aliased in out Tree'Class) return Node;
-
-   type Kinds is (Atom_Kind, Dict_Kind, List_Kind);
-
-   subtype Composite_Kinds is Kinds range Dict_Kind .. List_Kind;
+   function Root (This : aliased Tree'Class) return Node;
 
    function Is_Empty (This : Node) return Boolean;
    --  True for an unset root or for empty Dict or List
@@ -54,6 +61,9 @@ package Daseot is
    function Kind (This : Node) return Kinds;
    --  Will raise for an empty root
 
+   function Copy (This : Node'Class) return Tree;
+   --  Deep copy
+
    -------------
    --  Atoms  --
    -------------
@@ -61,6 +71,8 @@ package Daseot is
    procedure Set (This   : Node;
                   Value  : Scalar;
                   Retype : Boolean := False);
+
+   function Set (Value : Scalar) return Tree;
 
    function Get (This : Node) return Scalar;
 
@@ -70,10 +82,25 @@ package Daseot is
 
    subtype Keys is String;
 
+   function Empty_Dict return Tree;
+   function Dict return Tree renames Empty_Dict;
+
+   procedure Map (This   : aliased Node;
+                  Key    : Keys;
+                  Val    : Node'Class;
+                  Retype : Boolean := False);
+
    procedure Map (This   : aliased Node;
                   Key    : Keys;
                   Val    : Scalar;
                   Retype : Boolean := False);
+
+   function Map (This   : aliased Node;
+                 Key    : Keys;
+                 Val    : Node'Class;
+                 Retype : Boolean := False)
+                 return Node;
+   --  Maps to a copy of Val
 
    function Map (This   : aliased Node;
                  Key    : Keys;
@@ -88,15 +115,31 @@ package Daseot is
 
    subtype Indices is Positive;
 
+   function Empty_List return Tree;
+   function List return Tree renames Empty_List;
+
+   procedure Append (This   : aliased Node;
+                     Val    : Node;
+                     Retype : Boolean := False);
+
    procedure Append (This   : aliased Node;
                      Val    : Scalar;
                      Retype : Boolean := False);
+
+   function Append (This   : aliased Node;
+                    Val    : Node;
+                    Retype : Boolean := False)
+                    return Node;
 
    function Append (This   : aliased Node;
                     Val    : Scalar;
                     Retype : Boolean := False)
                     return Node;
    --  For chaining
+
+   function To_List (This : Tree_Array) return Tree with
+     Pre  => (for all E of This => E.Is_Populated),
+     Post => To_List'Result.Root.Kind = List_Kind;
 
    -----------------
    --  Internals  --
@@ -121,33 +164,59 @@ private
 
    Unimplemented : exception;
 
-   type Base_Node is abstract tagged null record;
+   package Base_Nodes is
 
-   function Is_Empty (This : Base_Node) return Boolean is abstract;
+      type Base_Node is abstract tagged null record;
+
+      function Ref (This : aliased Base_Node'Class) return Node;
+
+      function Is_Empty (This : Base_Node) return Boolean is abstract;
+
+   end Base_Nodes;
+
+   subtype Base_Node is Base_Nodes.Base_Node;
+
+   use all type Base_Node;
+
+   --  NOTE: Node is actually a reference type, out of the Base_Node hierarchy.
+   --  However, to maintain the appropriate naming for library clients, it is
+   --  called Node.
 
    type Node (Ptr : access Base_Node'Class) is tagged limited null record
      with Implicit_Dereference => Ptr;
 
-   function Ref (This : aliased Base_Node'Class) return Node'Class
-   is (Node'(Ptr => This'Unrestricted_Access));
+   function Base (This : Node'Class) return Base_Node'Class
+   is (This.Ptr.all);
 
    package Node_Holders is
      new Ada.Containers.Indefinite_Holders (Base_Node'Class);
 
-   type Root_Node is new Base_Node with record
-      Root : Node_Holders.Holder;
-   end record;
+   package Root_Nodes is
 
-   overriding function Is_Empty (This : Root_Node) return Boolean
-   is (This.Root.Is_Empty);
+      type Root_Node is new Base_Node with record
+         Root : Node_Holders.Holder;
+      end record;
 
-   subtype Placeholder is Node_Holders.Holder; -- TODO: remove
+      overriding function Is_Empty (This : Root_Node) return Boolean
+      is (This.Root.Is_Empty);
+
+      function Real_Ref (This : aliased Root_Node'Class) return Node;
+
+      procedure Store (This : in out Root_Node'Class;
+                       Ref  : Node);
+
+   end Root_Nodes;
+
+   subtype Root_Node is Root_Nodes.Root_Node;
+
+   function As_Root (This : Node'Class) return access Root_Node
+   is (Root_Node (This.Ptr.all)'Unchecked_Access);
 
    --  We use a doubly nested root so we can always return a reference to the
    --  root node.
 
    type Tree is tagged record
-      Root : Root_Node;
+      R : Root_Node;
    end record;
 
    package Node_Maps is
@@ -182,6 +251,20 @@ private
 
    function New_Dict return Real_Node;
 
+   function New_List return Real_Node;
+
+   function As_Real (This : Node'Class) return access Real_Node
+   is (Real_Node (This.Ptr.all)'Unchecked_Access);
+
+   type Impls is (Root, Real);
+
+   function Impl (This : Node'Class) return Impls
+   is (if This.Ptr.all in Real_Node'Class then
+          Real
+       elsif This.Ptr.all in Root_Node'Class then
+          Root
+       else raise Program_Error);
+
    type Cursor (Kind : Kinds) is record
       case Kind is
          when Atom_Kind =>
@@ -207,7 +290,15 @@ private
              not This.Value.Is_Empty,
           when Dict_Kind =>
              (for all E of This.Dict => E in Real_Node'Class),
-          when others    => True);
+          when List_Kind =>
+             (for all E of This.List => E in Real_Node'Class));
+
+   ----------------
+   -- Empty_Tree --
+   ----------------
+
+   function Empty_Tree return Tree
+   is (R => <>);
 
    -----------
    -- First --
@@ -244,7 +335,7 @@ private
    --------------
 
    function Is_Empty (This : Tree) return Boolean
-   is (This.Root.Is_Empty);
+   is (This.R.Is_Empty);
 
    -------------
    -- Is_Root --
@@ -252,6 +343,13 @@ private
 
    function Is_Root (This : Node) return Boolean
    is (This.Ptr.all in Root_Node);
+
+   ----------
+   -- Kind --
+   ----------
+
+   function Kind (This : Tree) return Kinds
+   is (This.Root.Kind);
 
    --------------
    -- New_Atom --
@@ -267,6 +365,14 @@ private
 
    function New_Dict return Real_Node
    is (Data => (Kind   => Dict_Kind,
+                others => <>));
+
+   --------------
+   -- New_List --
+   --------------
+
+   function New_List return Real_Node
+   is (Data => (Kind   => List_Kind,
                 others => <>));
 
    ----------
@@ -286,7 +392,7 @@ private
    -- Root --
    ----------
 
-   function Root (This : aliased in out Tree'Class) return Node
-   is (Ptr => This.Root'Unrestricted_Access);
+   function Root (This : aliased Tree'Class) return Node
+   is (Ptr => This.R'Unrestricted_Access);
 
 end Daseot;
