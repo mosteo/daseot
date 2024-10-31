@@ -33,7 +33,7 @@ procedure Test is
    FS   : constant Dir :=
             "/"
               / ("share/"
-                 / (+"lib/"),
+                 / ("lib/" / Empty),
                  "src/"
                  / (+"lib.ads",
                     +"lib.adb"),
@@ -82,4 +82,8 @@ begin
            .Append (Dict.Root.Map ("3", "c").Map ("4", "d")).Copy);
 
    Report ("Filesystem", FS);
+
+   --  Direct Tree usage
+
+   Report ("Atom tree on the fly", Empty_Tree.Set ("atom"));
 end Test;

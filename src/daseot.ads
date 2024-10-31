@@ -34,6 +34,17 @@ package Daseot with Preelaborate is
 
    type Tree_Array is array (Positive range <>) of Tree;
 
+   procedure Set (This   : Tree;
+                  Value  : Scalar;
+                  Retype : Boolean := False);
+
+   function Set (This   : Tree;
+                 Value  : Scalar;
+                 Retype : Boolean := False) return Tree;
+
+   function Get (This : Tree) return Scalar
+     with Pre => This.Kind = Atom_Kind;
+
    ------------
    --  Node  --
    ------------

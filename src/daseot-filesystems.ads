@@ -8,7 +8,7 @@ package Daseot.Filesystems with Preelaborate is
    --  Either a file or a folder
 
    subtype Dir is Item
-   --  with Dynamic_Predicate => Dir.Kind = List_Kind  --  kills GNAT 14
+   --  with Dynamic_Predicate => Dir.Kind = Dict_Kind  --  kills GNAT 14
    ;
 
    subtype File is Item
@@ -19,6 +19,8 @@ package Daseot.Filesystems with Preelaborate is
 
    subtype Contents is Tree_Array;
    --  The contents of a directory are always given as an array
+
+   Empty : constant Contents := (1 .. 0 => <>);
 
    function "/" (L : Name; R : Item) return Item;
    --  Dir that contains a single item

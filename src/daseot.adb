@@ -205,6 +205,13 @@ package body Daseot is
           when Real => This.As_Real.Data.Value.Element,
           when Root => This.As_Root.Real_Ref.Get);
 
+   ---------
+   -- Get --
+   ---------
+
+   function Get (This : Tree) return Scalar
+   is (This.Root.Get);
+
    -----------------
    -- Has_Element --
    -----------------
@@ -439,13 +446,39 @@ package body Daseot is
    function Set (Value : Scalar) return Tree
    is (New_Atom (Value).Ref.Copy);
 
+   ---------
+   -- Set --
+   ---------
+
+   procedure Set (This   : Tree;
+                  Value  : Scalar;
+                  Retype : Boolean := False)
+   is
+   begin
+      This.Root.Set (Value, Retype);
+   end Set;
+
+   ---------
+   -- Set --
+   ---------
+
+   function Set (This   : Tree;
+                 Value  : Scalar;
+                 Retype : Boolean := False) return Tree
+   is
+   begin
+      return Result : constant Tree := This do
+         This.Root.Set (Value, Retype);
+      end return;
+   end Set;
+
    -------------
    -- To_List --
    -------------
 
    function To_List (This : Tree_Array) return Tree is
    begin
-      return Result : Tree do
+      return Result : constant Tree := Empty_List do
          for E of This loop
             Result.Root.Append (E.Root);
          end loop;
