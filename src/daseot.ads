@@ -29,7 +29,7 @@ package Daseot with Preelaborate is
    function Image (This : Tree) return String;
    --  Multi-line UTF-8-encoded
 
-   function Kind (This : Tree) return Kinds
+   function Kind (This : aliased Tree) return Kinds
      with Pre => This.Is_Populated;
 
    type Tree_Array is array (Positive range <>) of Tree;
@@ -42,7 +42,7 @@ package Daseot with Preelaborate is
                  Value  : Scalar;
                  Retype : Boolean := False) return Tree;
 
-   function Get (This : Tree) return Scalar
+   function Get (This : aliased Tree) return Scalar
      with Pre => This.Kind = Atom_Kind;
 
    ------------
@@ -359,7 +359,7 @@ private
    -- Kind --
    ----------
 
-   function Kind (This : Tree) return Kinds
+   function Kind (This : aliased Tree) return Kinds
    is (This.Root.Kind);
 
    --------------

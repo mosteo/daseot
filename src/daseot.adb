@@ -209,7 +209,7 @@ package body Daseot is
    -- Get --
    ---------
 
-   function Get (This : Tree) return Scalar
+   function Get (This : aliased Tree) return Scalar
    is (This.Root.Get);
 
    -----------------

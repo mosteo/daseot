@@ -5,7 +5,7 @@ pragma Style_Checks (Off);
 package Daseot_Config is
    pragma Pure;
 
-   Crate_Version : constant String := "0.1.0-dev";
+   Crate_Version : constant String := "0.1.0";
    Crate_Name : constant String := "daseot";
 
    Alire_Host_OS : constant String := "linux";

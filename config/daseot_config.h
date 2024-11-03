@@ -2,7 +2,7 @@
 #ifndef DASEOT_CONFIG_H
 #define DASEOT_CONFIG_H
 
-#define CRATE_VERSION "0.1.0-dev"
+#define CRATE_VERSION "0.1.0"
 #define CRATE_NAME "daseot"
 
 #define ALIRE_HOST_OS "linux"
