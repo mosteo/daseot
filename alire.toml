@@ -8,3 +8,7 @@ maintainers-logins = ["mosteo"]
 licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
 website = ""
 tags = ["tree", "dict", "map", "list"]
+
+[[actions]]
+type = "test"
+command = ["alr", "-C", "test", "run"]
