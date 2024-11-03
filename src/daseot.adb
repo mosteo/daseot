@@ -232,7 +232,7 @@ package body Daseot is
    -- Image --
    -----------
 
-   function Image (This : Tree) return String is
+   function Image (This : Tree; Compact : Boolean := False) return String is
       use Ada.Strings.Unbounded;
       function "+" (S : String) return Unbounded_String
                     renames To_Unbounded_String;
@@ -258,11 +258,14 @@ package body Daseot is
                   Append (Result,
                           (if Contd then "" else Prefix) & Image (E.Get));
                end loop;
+
             when Dict_Kind =>
                declare
                   Real : Real_Node renames Real_Node (This.Ptr.all);
                   C    : Node_Maps.Cursor := Real.Data.Dict.First;
                   use Node_Maps;
+                  Abbr : constant Boolean :=
+                           Compact and then Real.Data.Dict.Length in 1;
                begin
                   if Real.Data.Dict.Is_Empty then
                      Append (Result,
@@ -270,21 +273,34 @@ package body Daseot is
                      return;
                   end if;
 
-                  Append (Result, (if Contd then "" else Prefix) & "{" & NL);
+                  Append (Result,
+                          (if Contd then "" else Prefix)
+                          & "{"
+                          & (if Abbr then ' ' else NL));
+
                   while Has_Element (C) loop
                      Append (Result,
-                             Prefix & Tab & Key (C) & " : ");
+                             (if Abbr then " " else Prefix & Tab)
+                             & Key (C) & " : ");
                      Traverse (Real.Data.Dict.Reference (C).Ref,
                                WS (Prefix & Tab & Key (C) & " : "),
                                Contd => True);
-                     Append (Result, NL);
+                     if not Abbr then
+                        Append (Result, NL);
+                     end if;
                      C := Next (C);
                   end loop;
-                  Append (Result, Prefix & "}");
+
+                  Append (Result,
+                          (if Abbr then " " else Prefix) & "}");
                end;
+
             when List_Kind =>
                declare
                   Real : Real_Node renames Real_Node (This.Ptr.all);
+                  Abbr : constant Boolean :=
+                           Compact and then Real.Data.List.Length in 1;
+                  I    : Natural := 0;
                begin
                   if Real.Data.List.Is_Empty then
                      Append (Result,
@@ -292,14 +308,25 @@ package body Daseot is
                      return;
                   end if;
 
-                  Append (Result, (if Contd then "" else Prefix) & "[" & NL);
+                  Append (Result,
+                          (if Contd then "" else Prefix)
+                          & "["
+                          & (if Abbr then ' ' else NL));
+
                   for E of This loop
                      Traverse (E,
                                Prefix & Tab,
-                               Contd => False);
-                     Append (Result, "," & NL);
+                               Contd => Abbr);
+                     I := I + 1;
+                     Append (Result,
+                             (if I = Natural (Real.Data.List.Length)
+                              then ""
+                              else ",")
+                             & (if Abbr then ' ' else NL));
                   end loop;
-                  Append (Result, Prefix & "]");
+                  Append (Result,
+                          (if Abbr then " " else Prefix)
+                          & "]");
                end;
          end case;
       end Traverse;
@@ -468,7 +495,7 @@ package body Daseot is
    is
    begin
       return Result : constant Tree := This do
-         This.Root.Set (Value, Retype);
+         Result.Root.Set (Value, Retype);
       end return;
    end Set;
 

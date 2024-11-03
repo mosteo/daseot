@@ -26,8 +26,9 @@ package Daseot with Preelaborate is
 
    function Is_Populated (This : Tree) return Boolean is (not This.Is_Empty);
 
-   function Image (This : Tree) return String;
-   --  Multi-line UTF-8-encoded
+   function Image (This : Tree; Compact : Boolean := False) return String;
+   --  Multi-line UTF-8-encoded. When Compact, single-item dicts/lists are
+   --  printed in a single line.
 
    function Kind (This : aliased Tree) return Kinds
      with Pre => This.Is_Populated;

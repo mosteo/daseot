@@ -86,4 +86,5 @@ begin
    --  Direct Tree usage
 
    Report ("Atom tree on the fly", Empty_Tree.Set ("atom"));
+   pragma Assert (Empty_Tree.Set ("atom").Get = "atom");
 end Test;
