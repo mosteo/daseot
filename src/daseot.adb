@@ -16,8 +16,10 @@ package body Daseot is
       -- Ref --
       ---------
 
-      function Ref (This : aliased Base_Node'Class) return Node
-      is (Node'(Ptr => This'Unrestricted_Access));
+      function Ref (This : aliased Base_Node'Class) return Node is
+      begin
+         return Node'(Ptr => This'Unrestricted_Access);
+      end Ref;
 
    end Base_Nodes;
 
@@ -31,8 +33,16 @@ package body Daseot is
       -- Real_Ref --
       --------------
 
-      function Real_Ref (This : aliased Root_Node'Class) return Node
-      is (Node'(Ptr => This.Root.Constant_Reference.Element));
+      function Real_Ref (This : aliased Root_Node'Class) return Node is
+      begin
+         if This.Root.Is_Empty then
+            raise Constraint_Error with "Empty root node, cannot be cast";
+         end if;
+
+         return Node'
+           (Ptr =>
+              This.Root.Constant_Reference.Element.all'Unrestricted_Access);
+      end Real_Ref;
 
       -----------
       -- Store --
@@ -138,6 +148,53 @@ package body Daseot is
       end return;
    end Append;
 
+   -------------
+   -- As_Real --
+   -------------
+
+   function As_Real (This : Node'Class) return access Real_Node
+   is
+   begin
+      return Real_Node (This.Ptr.all)'Unchecked_Access;
+   end As_Real;
+
+   -------------
+   -- As_Root --
+   -------------
+
+   function As_Root (This : Node'Class) return access Root_Node
+   is
+   begin
+      return Root_Node (This.Ptr.all)'Unchecked_Access;
+   end As_Root;
+
+   -----------------------------
+   -- Assert_Mutable_Contents --
+   -----------------------------
+
+   function Assert_Mutable_Contents (This : Mutable_Node) return Boolean
+   is
+   begin
+      return
+        (case This.Kind is
+            when Atom_Kind =>
+               not This.Value.Is_Empty,
+            when Dict_Kind =>
+              (for all E of This.Dict => E in Real_Node'Class),
+            when List_Kind =>
+              (for all E of This.List => E in Real_Node'Class));
+   end Assert_Mutable_Contents;
+
+   ----------
+   -- Base --
+   ----------
+
+   function Base (This : Node'Class) return Base_Node'Class
+   is
+   begin
+      return This.Ptr.all;
+   end Base;
+
    ----------
    -- Copy --
    ----------
@@ -196,6 +253,37 @@ package body Daseot is
       end return;
    end Empty_List;
 
+   ----------------
+   -- Empty_Tree --
+   ----------------
+
+   function Empty_Tree return Tree
+   is
+   begin
+      return Result : Tree;
+   end Empty_Tree;
+
+   -----------
+   -- First --
+   -----------
+
+   function First (This : Node) return Cursor is
+   begin
+      if This.Ptr.all in Real_Node then
+         case Real_Node (This.Ptr.all).Data.Kind is
+            when Atom_Kind =>
+               return (Kind => Atom_Kind, others => <>);
+            when Dict_Kind =>
+               raise Unimplemented;
+            when List_Kind =>
+               return (Kind        => List_Kind,
+                      List_Cursor => Real_Node (This.Ptr.all).Data.List.First);
+         end case;
+      else
+         raise Unimplemented;
+      end if;
+   end First;
+
    ---------
    -- Get --
    ---------
@@ -210,7 +298,10 @@ package body Daseot is
    ---------
 
    function Get (This : aliased Tree) return Scalar
-   is (This.Root.Get);
+   is
+   begin
+      return This.Root.Get;
+   end Get;
 
    -----------------
    -- Has_Element --
@@ -342,6 +433,57 @@ package body Daseot is
    end Image;
 
    ----------
+   -- Impl --
+   ----------
+
+   function Impl (This : Node'Class) return Impls
+   is
+   begin
+      return
+        (if This.Ptr.all in Real_Node'Class then
+            Real
+         elsif This.Ptr.all in Root_Node'Class then
+            Root
+         else raise Program_Error);
+   end Impl;
+
+   --------------
+   -- Is_Empty --
+   --------------
+
+   function Is_Empty (This : Node) return Boolean is
+   begin
+      return This.Ptr.Is_Empty;
+   end Is_Empty;
+
+   --------------
+   -- Is_Empty --
+   --------------
+
+   overriding function Is_Empty (This : Real_Node) return Boolean is
+   begin
+      return This.Data.Dict.Is_Empty;
+   end Is_Empty;
+
+   --------------
+   -- Is_Empty --
+   --------------
+
+   function Is_Empty (This : Tree) return Boolean is
+   begin
+      return This.R.Is_Empty;
+   end Is_Empty;
+
+   -------------
+   -- Is_Root --
+   -------------
+
+   function Is_Root (This : Node) return Boolean is
+   begin
+      return This.Ptr.all in Root_Node;
+   end Is_Root;
+
+   ----------
    -- Kind --
    ----------
 
@@ -352,6 +494,15 @@ package body Daseot is
           Kind (Root_Node (This.Ptr.all).Root.Constant_Reference.Ref)
        else
           raise Program_Error with Image (This.Ptr.all'Tag));
+
+   ----------
+   -- Kind --
+   ----------
+
+   function Kind (This : aliased Tree) return Kinds is
+   begin
+      return This.Root.Kind;
+   end Kind;
 
    ---------
    -- Map --
@@ -445,6 +596,69 @@ package body Daseot is
       end return;
    end Map;
 
+   --------------
+   -- New_Atom --
+   --------------
+
+   function New_Atom (Value : Scalar) return Real_Node
+   is
+   begin
+      return
+        (Data => (Kind  => Atom_Kind,
+                  Value => Scalar_Holders.To_Holder (Value)));
+   end New_Atom;
+
+   --------------
+   -- New_Dict --
+   --------------
+
+   function New_Dict return Real_Node
+   is
+   begin
+      return
+        (Data => (Kind   => Dict_Kind,
+                  others => <>));
+   end New_Dict;
+
+   --------------
+   -- New_List --
+   --------------
+
+   function New_List return Real_Node
+   is
+   begin
+      return
+        (Data => (Kind   => List_Kind,
+                  others => <>));
+   end New_List;
+
+   ----------
+   -- Next --
+   ----------
+
+   function Next (This : Node; C : Cursor) return Cursor
+   is
+   begin
+      return
+        (case C.Kind is
+            when Atom_Kind => (Kind => Atom_Kind, Visited => True),
+            when List_Kind =>
+              (Kind        => List_Kind,
+               List_Cursor => Node_Vectors.Next (C.List_Cursor)),
+            when others    => raise Unimplemented
+        );
+   end Next;
+
+   ----------
+   -- Root --
+   ----------
+
+   function Root (This : aliased Tree'Class) return Node
+   is
+   begin
+      return (Ptr => This.R'Unrestricted_Access);
+   end Root;
+
    ---------
    -- Set --
    ---------
@@ -471,7 +685,10 @@ package body Daseot is
    ---------
 
    function Set (Value : Scalar) return Tree
-   is (New_Atom (Value).Ref.Copy);
+   is
+   begin
+      return New_Atom (Value).Ref.Copy;
+   end Set;
 
    ---------
    -- Set --

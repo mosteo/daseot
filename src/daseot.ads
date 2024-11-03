@@ -197,8 +197,7 @@ private
    type Node (Ptr : access Base_Node'Class) is tagged limited null record
      with Implicit_Dereference => Ptr;
 
-   function Base (This : Node'Class) return Base_Node'Class
-   is (This.Ptr.all);
+   function Base (This : Node'Class) return Base_Node'Class;
 
    package Node_Holders is
      new Ada.Containers.Indefinite_Holders (Base_Node'Class);
@@ -221,8 +220,7 @@ private
 
    subtype Root_Node is Root_Nodes.Root_Node;
 
-   function As_Root (This : Node'Class) return access Root_Node
-   is (Root_Node (This.Ptr.all)'Unchecked_Access);
+   function As_Root (This : Node'Class) return access Root_Node;
 
    --  We use a doubly nested root so we can always return a reference to the
    --  root node.
@@ -265,17 +263,11 @@ private
 
    function New_List return Real_Node;
 
-   function As_Real (This : Node'Class) return access Real_Node
-   is (Real_Node (This.Ptr.all)'Unchecked_Access);
+   function As_Real (This : Node'Class) return access Real_Node;
 
    type Impls is (Root, Real);
 
-   function Impl (This : Node'Class) return Impls
-   is (if This.Ptr.all in Real_Node'Class then
-          Real
-       elsif This.Ptr.all in Root_Node'Class then
-          Root
-       else raise Program_Error);
+   function Impl (This : Node'Class) return Impls;
 
    type Cursor (Kind : Kinds) is record
       case Kind is
@@ -287,124 +279,5 @@ private
             List_Cursor : Node_Vectors.Cursor;
       end case;
    end record;
-
-   -------------
-   --  IMPLS  --
-   -------------
-
-   -----------------------------
-   -- Assert_Mutable_Contents --
-   -----------------------------
-
-   function Assert_Mutable_Contents (This : Mutable_Node) return Boolean
-   is (case This.Kind is
-          when Atom_Kind =>
-             not This.Value.Is_Empty,
-          when Dict_Kind =>
-             (for all E of This.Dict => E in Real_Node'Class),
-          when List_Kind =>
-             (for all E of This.List => E in Real_Node'Class));
-
-   ----------------
-   -- Empty_Tree --
-   ----------------
-
-   function Empty_Tree return Tree
-   is (R => <>);
-
-   -----------
-   -- First --
-   -----------
-
-   function First (This : Node) return Cursor
-   is (if This.Ptr.all in Real_Node then
-         (case Real_Node (This.Ptr.all).Data.Kind is
-             when Atom_Kind => (Kind => Atom_Kind, others => <>),
-             when Dict_Kind => raise Unimplemented,
-             when List_Kind =>
-               (Kind        => List_Kind,
-                List_Cursor => Real_Node (This.Ptr.all).Data.List.First))
-       else
-          raise Unimplemented
-      );
-
-   --------------
-   -- Is_Empty --
-   --------------
-
-   function Is_Empty (This : Node) return Boolean
-   is (This.Ptr.Is_Empty);
-
-   --------------
-   -- Is_Empty --
-   --------------
-
-   overriding function Is_Empty (This : Real_Node) return Boolean
-   is (This.Data.Dict.Is_Empty);
-
-   --------------
-   -- Is_Empty --
-   --------------
-
-   function Is_Empty (This : Tree) return Boolean
-   is (This.R.Is_Empty);
-
-   -------------
-   -- Is_Root --
-   -------------
-
-   function Is_Root (This : Node) return Boolean
-   is (This.Ptr.all in Root_Node);
-
-   ----------
-   -- Kind --
-   ----------
-
-   function Kind (This : aliased Tree) return Kinds
-   is (This.Root.Kind);
-
-   --------------
-   -- New_Atom --
-   --------------
-
-   function New_Atom (Value : Scalar) return Real_Node
-   is (Data => (Kind  => Atom_Kind,
-                Value => Scalar_Holders.To_Holder (Value)));
-
-   --------------
-   -- New_Dict --
-   --------------
-
-   function New_Dict return Real_Node
-   is (Data => (Kind   => Dict_Kind,
-                others => <>));
-
-   --------------
-   -- New_List --
-   --------------
-
-   function New_List return Real_Node
-   is (Data => (Kind   => List_Kind,
-                others => <>));
-
-   ----------
-   -- Next --
-   ----------
-
-   function Next (This : Node; C : Cursor) return Cursor
-   is (case C.Kind is
-          when Atom_Kind => (Kind => Atom_Kind, Visited => True),
-          when List_Kind =>
-            (Kind        => List_Kind,
-             List_Cursor => Node_Vectors.Next (C.List_Cursor)),
-          when others => raise Unimplemented
-      );
-
-   ----------
-   -- Root --
-   ----------
-
-   function Root (This : aliased Tree'Class) return Node
-   is (Ptr => This.R'Unrestricted_Access);
 
 end Daseot;

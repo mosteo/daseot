@@ -19,17 +19,6 @@ procedure Test is
 
    Tree : Trees.Tree;
 
-   --  FS   : constant Trees.Tree :=
-   --           "/"
-   --           / ("share/"
-   --              / "lib/",
-   --              "src/"
-   --              / (+"lib.ads",
-   --                 +"lib.adb"),
-   --              +"alire.toml",
-   --              +"lib.gpr")
-   --  ;
-
    FS   : constant Dir :=
             "/"
               / ("share/"
@@ -68,6 +57,8 @@ begin
 
    Report ("Empty dict", Dict);
    Report ("Empty list", List);
+
+   Report ("Single set", Set ("1"));
 
    Report ("List from array", To_List ((Set ("1"), Set ("2"))));
 
