@@ -1,14 +1,12 @@
-with Daseot;
-with Daseot.Filesystems;
-
 with GNAT.IO; use GNAT.IO;
+
+with Test_Extras;
 
 procedure Test is
 
-   function Image (S : String) return String is (S);
-
-   package Trees is new Daseot (String); use Trees;
-   package FSs is new Trees.Filesystems (Image); use FSs;
+   use Test_Extras;
+   use Test_Extras.Trees;
+   use FSs;
 
    procedure Report (Title : String; This : Trees.Tree) is
    begin
