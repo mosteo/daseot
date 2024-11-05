@@ -1,14 +1,12 @@
-with Daseot;
-with Daseot.Filesystems;
-
 with GNAT.IO; use GNAT.IO;
+
+with Test_Extras;
 
 procedure Test is
 
-   function Image (S : String) return String is (S);
-
-   package Trees is new Daseot (String); use Trees;
-   package FSs is new Trees.Filesystems (Image); use FSs;
+   use Test_Extras;
+   use Test_Extras.Trees;
+   use FSs;
 
    procedure Report (Title : String; This : Trees.Tree) is
    begin
@@ -18,17 +16,6 @@ procedure Test is
    end Report;
 
    Tree : Trees.Tree;
-
-   --  FS   : constant Trees.Tree :=
-   --           "/"
-   --           / ("share/"
-   --              / "lib/",
-   --              "src/"
-   --              / (+"lib.ads",
-   --                 +"lib.adb"),
-   --              +"alire.toml",
-   --              +"lib.gpr")
-   --  ;
 
    FS   : constant Dir :=
             "/"
@@ -69,6 +56,8 @@ begin
    Report ("Empty dict", Dict);
    Report ("Empty list", List);
 
+   Report ("Single set", Set ("1"));
+
    Report ("List from array", To_List ((Set ("1"), Set ("2"))));
 
    Report ("Dict with list",
@@ -86,4 +75,5 @@ begin
    --  Direct Tree usage
 
    Report ("Atom tree on the fly", Empty_Tree.Set ("atom"));
+   pragma Assert (Empty_Tree.Set ("atom").Get = "atom");
 end Test;

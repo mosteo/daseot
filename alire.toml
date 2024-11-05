@@ -1,10 +1,14 @@
 name = "daseot"
 description = "Data Serialization Oriented Trees"
-version = "0.1.0-dev"
+version = "0.1.0"
 
 authors = ["Alejandro R. Mosteo"]
 maintainers = ["Alejandro R. Mosteo <alejandro@mosteo.com>"]
 maintainers-logins = ["mosteo"]
 licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
 website = ""
-tags = ["tree", "map", "list"]
+tags = ["tree", "dict", "map", "list"]
+
+[[actions]]
+type = "test"
+command = ["alr", "-C", "test", "run"]
