@@ -1,6 +1,7 @@
-private with Ada.Containers.Indefinite_Holders;
 private with Ada.Containers.Indefinite_Ordered_Maps;
 private with Ada.Containers.Indefinite_Vectors;
+
+private with Daseot_Helpers.Holders;
 
 generic
    type Scalar (<>) is private;
@@ -174,6 +175,8 @@ package Daseot with Preelaborate is
 
 private
 
+   --  pragma Suppress (Container_Checks);
+
    Unimplemented : exception;
 
    package Base_Nodes is
@@ -190,6 +193,15 @@ private
 
    use all type Base_Node;
 
+   package Node_Maps is
+     new Ada.Containers.Indefinite_Ordered_Maps (Keys, Base_Node'Class);
+
+   package Node_Vectors is
+     new Ada.Containers.Indefinite_Vectors (Indices, Base_Node'Class);
+
+   package Scalar_Holders is
+     new Daseot_Helpers.Holders (Scalar);
+
    --  NOTE: Node is actually a reference type, out of the Base_Node hierarchy.
    --  However, to maintain the appropriate naming for library clients, it is
    --  called Node.
@@ -200,7 +212,7 @@ private
    function Base (This : Node'Class) return Base_Node'Class;
 
    package Node_Holders is
-     new Ada.Containers.Indefinite_Holders (Base_Node'Class);
+     new Daseot_Helpers.Holders (Base_Node'Class);
 
    package Root_Nodes is
 
@@ -208,8 +220,7 @@ private
          Root : Node_Holders.Holder;
       end record;
 
-      overriding function Is_Empty (This : Root_Node) return Boolean
-      is (This.Root.Is_Empty);
+      overriding function Is_Empty (This : Root_Node) return Boolean;
 
       function Real_Ref (This : aliased Root_Node'Class) return Node;
 
@@ -228,14 +239,6 @@ private
    type Tree is tagged record
       R : Root_Node;
    end record;
-
-   package Node_Maps is
-     new Ada.Containers.Indefinite_Ordered_Maps (Keys, Base_Node'Class);
-
-   package Node_Vectors is
-      new Ada.Containers.Indefinite_Vectors (Indices, Base_Node'Class);
-
-   package Scalar_Holders is new Ada.Containers.Indefinite_Holders (Scalar);
 
    function Assert_Mutable_Contents (This : Mutable_Node) return Boolean;
 

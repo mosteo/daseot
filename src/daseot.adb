@@ -30,6 +30,16 @@ package body Daseot is
    package body Root_Nodes is
 
       --------------
+      -- Is_Empty --
+      --------------
+
+      overriding function Is_Empty (This : Root_Node) return Boolean
+      is
+      begin
+         return This.Root.Is_Empty;
+      end Is_Empty;
+
+      --------------
       -- Real_Ref --
       --------------
 
@@ -41,7 +51,7 @@ package body Daseot is
 
          return Node'
            (Ptr =>
-              This.Root.Constant_Reference.Element.all'Unrestricted_Access);
+              This.Root.Ref);
       end Real_Ref;
 
       -----------
@@ -54,9 +64,9 @@ package body Daseot is
       begin
          case Ref.Impl is
             when Real =>
-               This.Root.Replace_Element (Ref.Ptr.all);
+               This.Root.Set (Ref.Ptr.all);
             when Root =>
-               This.Root.Replace_Element (Ref.As_Root.Root.Constant_Reference);
+               This.Root.Set (Ref.As_Root.Root.Get);
          end case;
       end Store;
 
@@ -202,7 +212,7 @@ package body Daseot is
    function Copy (This : Node'Class) return Tree is
    begin
       return Result : Tree do
-         Result.R.Root.Replace_Element
+         Result.R.Root.Set
            (if This.Is_Root and then not This.Is_Empty then
                Root_Node (This.Ptr.all).Real_Ref.Ptr.all
             else
@@ -237,7 +247,7 @@ package body Daseot is
    is
    begin
       return Result : Tree do
-         Result.R.Root.Replace_Element (New_Dict);
+         Result.R.Root.Set (New_Dict);
       end return;
    end Empty_Dict;
 
@@ -249,7 +259,7 @@ package body Daseot is
    is
    begin
       return Result : Tree do
-         Result.R.Root.Replace_Element (New_List);
+         Result.R.Root.Set (New_List);
       end return;
    end Empty_List;
 
@@ -290,7 +300,7 @@ package body Daseot is
 
    function Get (This : Node) return Scalar
    is (case This.Impl is
-          when Real => This.As_Real.Data.Value.Element,
+          when Real => This.As_Real.Data.Value.Get,
           when Root => This.As_Root.Real_Ref.Get);
 
    ---------
@@ -426,7 +436,7 @@ package body Daseot is
       if This.Is_Empty then
          Result := +"(empty)";
       else
-         Traverse (This.R.Root.Constant_Reference.Ref, "");
+         Traverse (This.R.Root.Ref.Ref, "");
       end if;
 
       return To_String (Result);
@@ -491,7 +501,7 @@ package body Daseot is
    is (if This.Ptr.all in Real_Node then
           Real_Node (This.Ptr.all).Data.Kind
        elsif This in Root_Node then
-          Kind (Root_Node (This.Ptr.all).Root.Constant_Reference.Ref)
+          This.Ptr.Ref.As_Root.Root.Ref.Ref.As_Real.Data.Kind
        else
           raise Program_Error with Image (This.Ptr.all'Tag));
 
@@ -603,9 +613,10 @@ package body Daseot is
    function New_Atom (Value : Scalar) return Real_Node
    is
    begin
-      return
-        (Data => (Kind  => Atom_Kind,
-                  Value => Scalar_Holders.To_Holder (Value)));
+      return Result : Real_Node := (Data => (Kind => Atom_Kind, others => <>))
+      do
+         Result.Data.Value.Set (Value);
+      end return;
    end New_Atom;
 
    --------------
@@ -666,7 +677,7 @@ package body Daseot is
    procedure Set (This : Node; Value : Scalar; Retype : Boolean := False) is
    begin
       if This.Ptr.all in Root_Node then
-         Root_Node (This.Ptr.all).Root.Replace_Element (New_Atom (Value));
+         This.Ptr.Ref.As_Root.Root.Set (New_Atom (Value));
       elsif This.Ptr.all in Real_Node then
          if This.Kind = Atom_Kind or else Retype then
             Real_Node (This.Ptr.all) := New_Atom (Value);
